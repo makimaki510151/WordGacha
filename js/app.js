@@ -19,7 +19,7 @@
   const JAM_FOR_PITY = 50;
   const MAX_GACHA_LOG = 120;
   /** 語の並びの直後に付く固定文（プレイヤー名の直前は語列） */
-  const FIXED_INTRO_TAIL = "です。対戦によろしくお願いします。";
+  const FIXED_INTRO_TAIL = "です。対戦よろしくお願いします。";
 
   /** 対戦共有: true なら語ID配列を Base64 で包む（難読化。鍵を伴わないため暗号ではない） */
   const BATTLE_SHARE_BASE64 = true;
