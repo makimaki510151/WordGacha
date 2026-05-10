@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WordGacha — 言葉のガチャと名刺バトル</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>WordGacha</h1>
+      <p>言葉を引き、組み立て、名刺にして、JSONで対戦。すべてブラウザ内で完結します。</p>
+    </header>
+
+    <div class="layout">
+      <nav class="side" aria-label="メニュー">
+        <button type="button" id="nav-gacha" class="active">ガチャ</button>
+        <button type="button" id="nav-dex">図鑑</button>
+        <button type="button" id="nav-build">組み立て</button>
+        <button type="button" id="nav-case">名刺入れ</button>
+        <button type="button" id="nav-battle">対戦</button>
+      </nav>
+
+      <main class="panel">
+        <section id="sec-gacha" class="panel-section active" aria-labelledby="nav-gacha">
+          <h2>ガチャ</h2>
+          <div class="card">
+            <div id="gacha-status" class="row"></div>
+            <p style="margin: 0.75rem 0 0; color: var(--muted); font-size: 0.9rem">
+              基本の助詞（の・で・と・が・を・な・や）と接続詞（そして・あるいは・しかし・だから）は<strong>最初から図鑑に入っています</strong>（ガチャでは出ません）。それ以外は1日最大100回まで。被りで<strong>言葉詰まり</strong>が1増え、<strong>50</strong>で次の1回は未所持狙い（コンプ済みは消費されず通常抽選）。残り10回以上で<strong>10連</strong>。ログに残ります。
+            </p>
+            <div class="row gacha-actions" style="margin-top: 1rem">
+              <button type="button" id="btn-pull" class="primary">ガチャを1回引く</button>
+              <button type="button" id="btn-pull-10" class="primary">10連ガチャ</button>
+              <label class="gacha-skip-fx">
+                <input type="checkbox" id="gacha-skip-fx" />
+                演出をスキップ
+              </label>
+            </div>
+            <div class="gacha-stage-wrap">
+              <div id="gacha-stage" class="gacha-stage" aria-live="polite">
+                <div id="gacha-reveal" class="gacha-reveal">ここに演出が表示されます</div>
+                <div id="gacha-hint" class="gacha-hint">ガチャボタンで開始</div>
+              </div>
+            </div>
+            <p id="gacha-result" style="margin-top: 1rem; min-height: 1.5rem"></p>
+            <div class="gacha-log-box">
+              <h3>ガチャログ（最新が上）</h3>
+              <ul id="gacha-log-list" class="gacha-log-list"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section id="sec-dex" class="panel-section" aria-labelledby="nav-dex">
+          <h2>図鑑</h2>
+          <div class="card">
+            <p style="margin: 0 0 0.5rem; color: var(--muted); font-size: 0.9rem">
+              基本の助詞・接続詞は最初から開いています。その他はガチャで初めて出た言葉だけが開き、未入手は内容が分かりません。
+            </p>
+            <div id="dex-grid" class="word-grid"></div>
+          </div>
+        </section>
+
+        <section id="sec-build" class="panel-section" aria-labelledby="nav-build">
+          <h2>組み立て</h2>
+          <div class="card">
+            <p style="margin: 0 0 0.75rem; color: var(--muted); font-size: 0.9rem">
+              図鑑の言葉を好きな順に並べます（1〜10語・重複なし）。下の検索・種類で絞り込めます。プレイヤー名のあとに固定のあいさつ文が続きます。
+            </p>
+            <div class="build-filter row" style="margin-bottom: 0.75rem; align-items: flex-end">
+              <div>
+                <label for="build-word-search">言葉を検索</label><br />
+                <input type="search" id="build-word-search" autocomplete="off" placeholder="文字の一部で検索" />
+              </div>
+              <div>
+                <label for="build-kind-filter">種類で絞る</label><br />
+                <select id="build-kind-filter">
+                  <option value="">すべて</option>
+                  <option value="noun">名詞</option>
+                  <option value="adj_na">な形容</option>
+                  <option value="conj">接続詞</option>
+                  <option value="particle">助詞</option>
+                </select>
+              </div>
+            </div>
+            <div id="build-slots" class="builder-chain"></div>
+            <div class="row" style="margin-top: 0.75rem">
+              <button type="button" id="btn-add-slot" class="secondary">語の枠を追加</button>
+            </div>
+            <div class="row" style="margin-top: 0.75rem">
+              <label for="player-name">プレイヤー名</label>
+              <input type="text" id="player-name" name="player-name" placeholder="例: 太郎" maxlength="32" autocomplete="nickname" />
+            </div>
+            <div id="build-preview" class="builder-preview" aria-live="polite"></div>
+            <div class="row">
+              <label for="preset-name">名刺の名前</label>
+              <input type="text" id="preset-name" placeholder="例: メイン構文" maxlength="40" />
+              <button type="button" id="btn-save-preset" class="primary">名刺入れに保存</button>
+            </div>
+            <p id="build-status" style="margin-top: 0.75rem; min-height: 1.25rem"></p>
+          </div>
+        </section>
+
+        <section id="sec-case" class="panel-section" aria-labelledby="nav-case">
+          <h2>名刺入れ</h2>
+          <div class="card">
+            <p style="margin: 0 0 0.75rem; color: var(--muted); font-size: 0.9rem">
+              完成した文を確認し、<strong>JSONをコピー</strong>で語の並び・プレイヤー名・（既定と異なる場合のみ）固定文末を含む共有データを Discord 用コードブロック形式でコピーします。
+            </p>
+            <div id="case-list"></div>
+            <p id="case-copy-toast" class="case-copy-toast" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section id="sec-battle" class="panel-section" aria-labelledby="nav-battle">
+          <h2>対戦（ローカル）</h2>
+          <div class="card">
+            <p style="margin: 0 0 0.75rem; color: var(--muted); font-size: 0.9rem">
+              相手には共有用のJSON（<code>v</code> と <code>b</code> など）を貼り付けます。<strong>勝敗は色付きバナーと短い説明</strong>で示し、その下に名乗りと物語文が続きます（数値は出しません）。
+            </p>
+            <div class="row" style="margin-bottom: 0.75rem">
+              <label for="battle-local">自分の名刺</label>
+              <span id="battle-local"></span>
+            </div>
+            <label for="battle-opp">相手のJSON</label>
+            <textarea id="battle-opp" placeholder="JSON 本体、または Discord のコードブロックごと貼り付け可"></textarea>
+            <div class="row" style="margin-top: 0.75rem">
+              <button type="button" id="btn-battle" class="primary">名乗りを突き合わせる</button>
+            </div>
+            <div id="battle-out" class="battle-log battle-theater" style="margin-top: 1rem" role="region" aria-live="polite"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="app-footer">
+      言葉データは <code>js/words.js</code> の <code>WORD_CATALOG</code> に追記して増やせます（約500語入り）。
+    </footer>
+
+    <script src="js/words.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
