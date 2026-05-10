@@ -514,4 +514,17 @@ const WORD_CATALOG = [
   { id: "w498", text: "柄杓", kind: "noun", tags: ["water","craft"], power: 1, slotMask: 7 },
   { id: "w499", text: "柄杓屋", kind: "noun", tags: ["trade","neutral"], power: 2, slotMask: 7 },
   { id: "w500", text: "水屋", kind: "noun", tags: ["water","trade"], power: 2, slotMask: 7 },
+  /* 句読点・記号（助詞扱い・初期入手・ガチャ対象外） */
+  { id: "w501", text: "、", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w502", text: "。", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w503", text: "・", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w504", text: "「", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w505", text: "」", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w506", text: "…", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w507", text: "？", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w508", text: "！", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w509", text: "：", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w510", text: "；", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w511", text: "（", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  { id: "w512", text: "）", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
 ];

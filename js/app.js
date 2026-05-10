@@ -29,10 +29,11 @@
   const CATALOG = WORD_CATALOG;
   const byId = new Map(CATALOG.map((w) => [w.id, w]));
 
-  /** よく使う助詞・接続詞（常に図鑑登録済み。ガチャでは出ません） */
+  /** よく使う助詞・接続詞・句読点（常に図鑑登録済み。ガチャでは出ません） */
   const STARTER_GRAMMAR_IDS = [
     "w051", "w052", "w053", "w054", "w055", "w121", "w241",
     "w041", "w042", "w043", "w044",
+    "w501", "w502", "w503", "w504", "w505", "w506", "w507", "w508", "w509", "w510", "w511", "w512",
   ];
   const STARTER_GRAMMAR_SET = new Set(STARTER_GRAMMAR_IDS.filter((id) => byId.has(id)));
 
