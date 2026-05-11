@@ -542,4 +542,8 @@ const WORD_CATALOG = [
   { id: "w523", text: "十", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
   { id: "w524", text: "百", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
   { id: "w525", text: "千", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w526", text: "狂気", kind: "noun", tags: ["shadow", "mind"], power: 5, slotMask: 7 },
+  { id: "w527", text: "山脈", kind: "noun", tags: ["nature", "earth"], power: 6, slotMask: 7 },
+  { id: "w528", text: "狂", kind: "noun", tags: ["shadow", "mind"], power: 4, slotMask: 7 },
+  { id: "w529", text: "脈", kind: "noun", tags: ["earth", "life"], power: 4, slotMask: 7 },
 ];
