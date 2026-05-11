@@ -527,4 +527,19 @@ const WORD_CATALOG = [
   { id: "w510", text: "；", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
   { id: "w511", text: "（", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
   { id: "w512", text: "）", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  /* 助詞「に」（初期入手・ガチャ対象外は app.js の STARTER_GRAMMAR_IDS で指定） */
+  { id: "w513", text: "に", kind: "particle", tags: ["link", "neutral"], power: 0, slotMask: 7 },
+  /* 漢数字（一〜九・十・百・千） */
+  { id: "w514", text: "一", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w515", text: "二", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w516", text: "三", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w517", text: "四", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w518", text: "五", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w519", text: "六", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w520", text: "七", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w521", text: "八", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w522", text: "九", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w523", text: "十", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w524", text: "百", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
+  { id: "w525", text: "千", kind: "noun", tags: ["neutral", "mind"], power: 1, slotMask: 7 },
 ];
