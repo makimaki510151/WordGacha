@@ -50,6 +50,30 @@
     return iAmA ? "b" : "a";
   }
 
+  function pickInsertedBattleId(data) {
+    if (data == null) return null;
+    const row = Array.isArray(data) ? data[0] : data;
+    return row && row.id != null ? String(row.id) : null;
+  }
+
+  function appendOnlineBattleRecordNotes(outEl, countedForRate, mode, battleId) {
+    if (!outEl) return;
+    const p1 = document.createElement("p");
+    p1.className = "battle-record-note";
+    p1.textContent = countedForRate
+      ? "名刺入れに記録しました（初めて対戦する相手のため、勝率に反映されます）。"
+      : "名刺入れに記録しました（すでに対戦済みの相手のため、勝率は変わりません）。";
+    outEl.appendChild(p1);
+    const p2 = document.createElement("p");
+    p2.className = "battle-record-note battle-record-note--db";
+    const modeJa = mode === "direct" ? "指定対戦（オンライン）" : "ランダム（公開名刺・オンライン）";
+    const idStr = battleId != null && String(battleId).length > 0 ? String(battleId) : "";
+    p2.textContent = idStr
+      ? `Supabase に保存しました（${modeJa} · 対戦ID: ${idStr}）。`
+      : `Supabase に保存しました（${modeJa}）。`;
+    outEl.appendChild(p2);
+  }
+
   function $(id) {
     return document.getElementById(id);
   }
@@ -214,18 +238,34 @@
     const dbWinner = mapBattleResultToDbWinner(r, true);
     const oppOwner = card.owner_id;
 
-    const ins = await client.from("battles").insert({
-      mode: "random_card",
-      a_user: session.user.id,
-      b_user: oppOwner,
-      a_payload: myPayload,
-      b_payload: oppPayload,
-      a_fp: myPayload.fingerprint,
-      b_fp: card.fingerprint,
-      winner: dbWinner,
-    });
-    if (ins.error) setOnlineMsg(msgEl, `記録エラー: ${ins.error.message}`, true);
-    else setOnlineMsg(msgEl, "対戦完了（未対戦の名刺を優先して選んでいます）。", false);
+    const ins = await client
+      .from("battles")
+      .insert({
+        mode: "random_card",
+        a_user: session.user.id,
+        b_user: oppOwner,
+        a_payload: myPayload,
+        b_payload: oppPayload,
+        a_fp: myPayload.fingerprint,
+        b_fp: card.fingerprint,
+        winner: dbWinner,
+      })
+      .select("id");
+    if (ins.error) {
+      setOnlineMsg(msgEl, `記録エラー: ${ins.error.message}`, true);
+    } else {
+      const battleId = pickInsertedBattleId(ins.data);
+      let countedForRate = true;
+      if (typeof deps.appendPresetBattleHistory === "function") {
+        const meta = deps.appendPresetBattleHistory(idx, parsed, oppLine, r.winner, {
+          battleSource: "random_card",
+          battleId,
+        });
+        countedForRate = meta ? meta.countedForRate : true;
+      }
+      appendOnlineBattleRecordNotes(out, countedForRate, "random_card", battleId);
+      setOnlineMsg(msgEl, "対戦完了（未対戦の名刺を優先して選んでいます）。", false);
+    }
   }
 
   async function runDirect() {
@@ -279,18 +319,34 @@
     renderOnlineBattle(out, r, myPreset.name, myLine, oppLine);
 
     const dbWinner = mapBattleResultToDbWinner(r, true);
-    const ins = await client.from("battles").insert({
-      mode: "direct",
-      a_user: session.user.id,
-      b_user: targetUuid,
-      a_payload: myPayload,
-      b_payload: oppPayload,
-      a_fp: myPayload.fingerprint,
-      b_fp: card.fingerprint,
-      winner: dbWinner,
-    });
-    if (ins.error) setOnlineMsg(msgEl, `記録エラー: ${ins.error.message}`, true);
-    else setOnlineMsg(msgEl, "指定対戦を記録しました。", false);
+    const ins = await client
+      .from("battles")
+      .insert({
+        mode: "direct",
+        a_user: session.user.id,
+        b_user: targetUuid,
+        a_payload: myPayload,
+        b_payload: oppPayload,
+        a_fp: myPayload.fingerprint,
+        b_fp: card.fingerprint,
+        winner: dbWinner,
+      })
+      .select("id");
+    if (ins.error) {
+      setOnlineMsg(msgEl, `記録エラー: ${ins.error.message}`, true);
+    } else {
+      const battleId = pickInsertedBattleId(ins.data);
+      let countedForRate = true;
+      if (typeof deps.appendPresetBattleHistory === "function") {
+        const meta = deps.appendPresetBattleHistory(idx, parsed, oppLine, r.winner, {
+          battleSource: "direct",
+          battleId,
+        });
+        countedForRate = meta ? meta.countedForRate : true;
+      }
+      appendOnlineBattleRecordNotes(out, countedForRate, "direct", battleId);
+      setOnlineMsg(msgEl, "指定対戦を記録しました。", false);
+    }
   }
 
   function init(appDeps) {

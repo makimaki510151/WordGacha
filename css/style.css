@@ -579,6 +579,18 @@ select.slot-word-select {
   margin-top: 0.25rem;
 }
 
+.preset-battle-log__db {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.preset-battle-log__db code {
+  font-size: 0.72rem;
+  word-break: break-all;
+}
+
 .preset-battle-tag {
   display: inline-block;
   margin-top: 0.2rem;
@@ -601,6 +613,18 @@ select.slot-word-select {
   border: 1px solid var(--border);
 }
 
+.preset-battle-tag--online {
+  background: rgba(120, 160, 255, 0.12);
+  color: #a8c4ff;
+  border: 1px solid rgba(120, 160, 255, 0.35);
+}
+
+.preset-battle-tag--local {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .battle-record-note {
   margin: 1rem 0 0;
   padding-top: 0.85rem;
@@ -608,6 +632,14 @@ select.slot-word-select {
   font-size: 0.88rem;
   color: var(--muted);
   line-height: 1.55;
+}
+
+.battle-record-note--db {
+  margin-top: 0.5rem;
+  padding-top: 0;
+  border-top: none;
+  font-size: 0.82rem;
+  opacity: 0.92;
 }
 
 .case-copy-toast {

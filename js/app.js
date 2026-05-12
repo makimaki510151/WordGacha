@@ -150,6 +150,35 @@
     return "lose";
   }
 
+  /**
+   * 名刺入れの対戦履歴に1件追加（ローカル・オンライン共通）。初回/再戦は oppKey で判定。
+   * @param {Record<string, unknown>} [extra] battleSource: 'local'|'random_card'|'direct', battleId?: string
+   * @returns {{ countedForRate: boolean } | null}
+   */
+  function appendPresetBattleHistory(presetIndex, parsedOpp, oppLine, winnerR, extra) {
+    const all = loadPresets();
+    const p = all[presetIndex];
+    if (!p || !parsedOpp || !Array.isArray(parsedOpp.wordIds) || !parsedOpp.wordIds.length) return null;
+    normalizePreset(p);
+    const oppKey = oppBattleFingerprint(parsedOpp.wordIds, parsedOpp.playerName, parsedOpp.fixedTail);
+    const had = p.battleHistory.some((h) => h && h.oppKey === oppKey);
+    const countedForRate = !had;
+    const entry = Object.assign(
+      {
+        at: Date.now(),
+        oppKey,
+        oppDisplayLine: oppLine || "",
+        result: battleResultLetter(winnerR),
+        countedForRate,
+      },
+      extra && typeof extra === "object" ? extra : {}
+    );
+    p.battleHistory.push(entry);
+    savePresets(all);
+    window.dispatchEvent(new CustomEvent("wg:presets-changed"));
+    return { countedForRate };
+  }
+
   function battleResultLabelJa(letter) {
     if (letter === "win") return "勝ち";
     if (letter === "lose") return "負け";
@@ -907,13 +936,28 @@
               const rateNote = counted
                 ? '<span class="preset-battle-tag preset-battle-tag--counted">勝率集計対象</span>'
                 : '<span class="preset-battle-tag preset-battle-tag--repeat">再戦（勝率は変化なし）</span>';
+              let srcBadge = "";
+              if (h.battleSource === "random_card") {
+                srcBadge =
+                  '<span class="preset-battle-tag preset-battle-tag--online">ランダム・オンライン</span>';
+              } else if (h.battleSource === "direct") {
+                srcBadge = '<span class="preset-battle-tag preset-battle-tag--online">指定・オンライン</span>';
+              } else if (h.battleSource === "local") {
+                srcBadge = '<span class="preset-battle-tag preset-battle-tag--local">ローカル</span>';
+              }
               const res = battleResultLabelJa(h.result);
               const when = formatBattleAt(h.at);
               const oppShort = truncateOneLine(h.oppDisplayLine || "（相手名乗り不明）", 72);
+              const dbLine =
+                h.battleId != null && String(h.battleId).length > 0
+                  ? `<div class="preset-battle-log__db">Supabase 対戦ID: <code>${escapeHtml(String(h.battleId))}</code></div>`
+                  : "";
               return `<li class="preset-battle-log__item">
             <span class="preset-battle-log__meta">${escapeHtml(when)} · ${escapeHtml(res)}</span>
             ${rateNote}
+            ${srcBadge}
             <span class="preset-battle-log__opp">相手「${escapeHtml(oppShort)}」</span>
+            ${dbLine}
           </li>`;
             })
             .join("");
@@ -1226,22 +1270,8 @@
       const oppLine = buildOpponentDisplayLine(opp, parsedOpp);
       renderBattleResult(els.battleOut, r, myPreset.name, myLine, oppLine);
 
-      normalizePreset(myPreset);
-      const oppKey = oppBattleFingerprint(
-        parsedOpp.wordIds,
-        parsedOpp.playerName,
-        parsedOpp.fixedTail
-      );
-      const hadOpponentBefore = myPreset.battleHistory.some((h) => h && h.oppKey === oppKey);
-      const countedForRate = !hadOpponentBefore;
-      myPreset.battleHistory.push({
-        at: Date.now(),
-        oppKey,
-        oppDisplayLine: oppLine,
-        result: battleResultLetter(r.winner),
-        countedForRate,
-      });
-      savePresets(presets);
+      const histMeta = appendPresetBattleHistory(idx, parsedOpp, oppLine, r.winner, { battleSource: "local" });
+      const countedForRate = histMeta ? histMeta.countedForRate : true;
 
       const note = document.createElement("p");
       note.className = "battle-record-note";
@@ -1337,6 +1367,7 @@
         battle,
         FIXED_INTRO_TAIL,
         oppBattleFingerprint,
+        appendPresetBattleHistory,
       });
     }
   }
