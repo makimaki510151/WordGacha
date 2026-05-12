@@ -1,7 +1,7 @@
 -- WordGacha / Supabase 初期スキーマ
 -- ダッシュボード → SQL Editor に貼り付けて実行してください。
 -- その後: Authentication → Providers で Google を有効化（匿名は不要）。
--- Database → Replication で public.battles を Realtime に追加（ランダム待ち受け用・任意）。
+-- Database → Replication で public.battles を Realtime に追加する場合は任意。
 
 -- ---- profiles ----
 create table if not exists public.profiles (
@@ -81,10 +81,10 @@ create policy "shared_cards_delete_own"
   to authenticated
   using (owner_id = auth.uid());
 
--- ---- オンライン対戦ログ ----
+-- ---- オンライン対戦ログ（登録名刺ランダム・指定対戦） ----
 create table if not exists public.battles (
   id uuid primary key default gen_random_uuid(),
-  mode text not null check (mode in ('random_human', 'random_card', 'direct')),
+  mode text not null check (mode in ('random_card', 'direct')),
   a_user uuid not null references auth.users on delete cascade,
   b_user uuid not null references auth.users on delete cascade,
   a_payload jsonb not null,
@@ -111,148 +111,7 @@ create policy "battles_insert_as_a"
   to authenticated
   with check (a_user = auth.uid());
 
--- ---- ランダム・実プレイヤー待ちキュー ----
-create table if not exists public.random_queue (
-  user_id uuid primary key references auth.users on delete cascade,
-  payload jsonb not null,
-  joined_at timestamptz default now()
-);
-
-alter table public.random_queue enable row level security;
-
-create policy "random_queue_select_own"
-  on public.random_queue for select
-  to authenticated
-  using (user_id = auth.uid());
-
-create policy "random_queue_insert_own"
-  on public.random_queue for insert
-  to authenticated
-  with check (user_id = auth.uid());
-
-create policy "random_queue_delete_own"
-  on public.random_queue for delete
-  to authenticated
-  using (user_id = auth.uid());
-
-create policy "random_queue_update_own"
-  on public.random_queue for update
-  to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
-
 -- ========= RPC =========
-
--- ランダム・人対人: キューでマッチしたら battles に 1 行挿入（SECURITY DEFINER）
-create or replace function public.rpc_match_random_queue(p_payload jsonb)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  me uuid := auth.uid();
-  partner random_queue%rowtype;
-  new_id uuid;
-  ordered_a uuid;
-  ordered_b uuid;
-  payload_a jsonb;
-  payload_b jsonb;
-  fp_a text;
-  fp_b text;
-begin
-  if me is null then
-    return jsonb_build_object('ok', false, 'error', 'not_authenticated');
-  end if;
-
-  delete from public.random_queue where user_id = me;
-
-  select * into partner
-  from public.random_queue
-  where user_id <> me
-  order by joined_at asc
-  limit 1
-  for update skip locked;
-
-  if not found then
-    insert into public.random_queue (user_id, payload)
-    values (me, p_payload);
-    return jsonb_build_object('ok', true, 'matched', false);
-  end if;
-
-  delete from public.random_queue where user_id = partner.user_id;
-
-  if me::text < partner.user_id::text then
-    ordered_a := me;
-    ordered_b := partner.user_id;
-    payload_a := p_payload;
-    payload_b := partner.payload;
-  else
-    ordered_a := partner.user_id;
-    ordered_b := me;
-    payload_a := partner.payload;
-    payload_b := p_payload;
-  end if;
-
-  fp_a := coalesce(payload_a->>'fingerprint', '');
-  fp_b := coalesce(payload_b->>'fingerprint', '');
-
-  insert into public.battles (mode, a_user, b_user, a_payload, b_payload, a_fp, b_fp, winner)
-  values ('random_human', ordered_a, ordered_b, payload_a, payload_b, fp_a, fp_b, 'draw')
-  returning id into new_id;
-
-  return jsonb_build_object(
-    'ok', true,
-    'matched', true,
-    'battle_id', new_id,
-    'i_am_a', me = ordered_a,
-    'opponent_payload', case when me = ordered_a then payload_b else payload_a end,
-    'my_payload', case when me = ordered_a then payload_a else payload_b end
-  );
-end;
-$$;
-
-grant execute on function public.rpc_match_random_queue(jsonb) to authenticated;
-
--- 勝敗を確定（クライアント計算結果を保存。厳密な改ざん防止には Edge Functions で再計算を推奨）
-create or replace function public.rpc_finalize_human_battle(p_battle_id uuid, p_winner text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  me uuid := auth.uid();
-  u_a uuid;
-  u_b uuid;
-begin
-  if me is null then
-    return jsonb_build_object('ok', false, 'error', 'not_authenticated');
-  end if;
-  if p_winner not in ('a', 'b', 'draw') then
-    return jsonb_build_object('ok', false, 'error', 'bad_winner');
-  end if;
-
-  select a_user, b_user into u_a, u_b
-  from public.battles
-  where id = p_battle_id and mode = 'random_human';
-
-  if not found then
-    return jsonb_build_object('ok', false, 'error', 'not_found');
-  end if;
-  if me <> u_a and me <> u_b then
-    return jsonb_build_object('ok', false, 'error', 'forbidden');
-  end if;
-
-  update public.battles
-  set winner = p_winner
-  where id = p_battle_id;
-
-  return jsonb_build_object('ok', true);
-end;
-$$;
-
-grant execute on function public.rpc_finalize_human_battle(uuid, text) to authenticated;
 
 -- 登録済み名刺からランダムに 1 枚（未対戦を優先）
 create or replace function public.rpc_pick_random_shared_card()

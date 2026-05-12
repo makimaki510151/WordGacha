@@ -26,20 +26,11 @@
 
 **SQL Editor** で `supabase/migration_wg_user_save.sql` を実行すると、`wg_user_save` テーブルと RLS、プロフィール用トリガーの更新が入ります。
 
-### 4. Realtime（任意・推奨）
+**以前の schema で「実プレイヤー用ランダム」を入れたプロジェクト**では、不要になったキューと RPC を消すために `supabase/drop_random_human.sql` も実行してください（`battles` の `mode` に `random_human` が残っている場合は、ファイル内の `DELETE` のコメントを外してから実行します）。
 
-**何のためか:** 「ランダム対戦（実プレイヤー）」でキューに入って待っているとき、誰かとマッチするとサーバーに `battles` の行が追加されます。ブラウザが **Realtime** でその追加を購読すると、**すぐ**対戦結果画面に進めます。Realtime を付けなくても、**約 2.5 秒ごとのポーリング**で同じ行を拾うので、最終的には動きます。
+### 4. Realtime（任意）
 
-**やり方 A（ダッシュボード）※画面名はプロジェクトで多少違うことがあります**
-
-1. 左メニュー **Database** を開く。
-2. 上部または左の **Replication**（または「パブリケーション」「Realtime」に近い項目）を開く。
-3. **`public`** スキーマの一覧からテーブル **`battles`** を探し、**Realtime を ON** にする（「Enable」やトグルで有効化）。
-
-**やり方 B（SQL の方が確実）**
-
-1. **SQL Editor** を開く。
-2. リポジトリ内の `supabase/enable-realtime-battles.sql` の中身（1 行の `alter publication ...`）を貼り付けて **Run** する。
+`battles` テーブルを Realtime に載せると、将来クライアントで変更を購読しやすくなります。現状のゲーム機能では**必須ではありません**。有効にする場合は `supabase/enable-realtime-battles.sql` を SQL Editor で実行するか、ダッシュボード **Database → Replication** から `public.battles` をオンにしてください。
 
 **API キーについて:** [Settings → API](https://supabase.com/dashboard/project/_/settings/api) の **anon** はブラウザ埋め込み用の公開鍵です。**GitHub Pages** では `js/supabase-config.js` をリポジトリに含める必要があるため（含めないと 404）、このリポジトリでは既定で `js/supabase-config.js` を追跡しています。公開リポジトリで気になる場合は [Dashboard で anon をローテート](https://supabase.com/dashboard/project/_/settings/api)し、値を差し替えてください。
 

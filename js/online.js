@@ -1,5 +1,5 @@
 /**
- * Supabase オンライン: Google ログイン後の名刺公開・ランダムマッチ・登録名刺から対戦・指定対戦
+ * Supabase オンライン: Google ログイン後の名刺公開・登録名刺ランダム対戦・指定対戦
  */
 (function (global) {
   "use strict";
@@ -11,9 +11,6 @@
       ? global.WordGachaCloudSync.getClient()
       : null;
   }
-  let waitingRealtime = null;
-  let waitPollTimer = null;
-  const handledHumanBattles = new Set();
 
   function cfgOk() {
     const c = global.WG_SUPABASE_CONFIG;
@@ -176,160 +173,6 @@
     deps.renderBattleResult(el, r, myTitle, myLine, oppLine);
   }
 
-  async function runRandomHuman() {
-    const out = $("online-out");
-    const msgEl = $("online-config-msg");
-    const session = await ensureSession();
-    if (!session) {
-      setOnlineMsg(msgEl, "先にログインしてください。", true);
-      return;
-    }
-    const sel = $("sel-online-preset");
-    const presets = deps.loadPresets();
-    const idx = sel ? parseInt(sel.value, 10) : NaN;
-    if (!presets[idx]) {
-      setOnlineMsg(msgEl, "名刺を選んでください。", true);
-      return;
-    }
-    const myPreset = presets[idx];
-    const myPayload = presetToPayload(myPreset, deps.getPresetDisplayLine, deps.oppBattleFingerprint, deps.FIXED_INTRO_TAIL);
-
-    const client = getSb();
-    if (!client) return;
-    const { data, error } = await client.rpc("rpc_match_random_queue", { p_payload: myPayload });
-    if (error) {
-      setOnlineMsg(msgEl, `マッチングエラー: ${error.message}`, true);
-      return;
-    }
-    if (!data || !data.ok) {
-      setOnlineMsg(msgEl, "サーバー応答が不正です。", true);
-      return;
-    }
-
-    if (data.matched) {
-      await resolveMatchedHumanBattle(data, myPreset, myPayload);
-      return;
-    }
-
-    setOnlineMsg(msgEl, "別のプレイヤーを待っています…（キャンセルでキューから外せます）", false);
-    startWaitingForHumanMatch(session.user.id, myPreset, myPayload);
-  }
-
-  async function resolveMatchedHumanBattle(data, myPreset, myPayload) {
-    stopWaiting();
-    const msgEl = $("online-config-msg");
-    const out = $("online-out");
-    const oppPayload = data.opponent_payload;
-    const parsed = parsePayloadAsParsedOpp(oppPayload);
-    const myIds = myPayload.wordIds;
-    const oppIds = parsed.wordIds || [];
-    const r = deps.battle(myIds, oppIds);
-    const myLine = deps.getPresetDisplayLine(myPreset);
-    const oppLine = deps.buildOpponentDisplayLine({}, parsed);
-    renderOnlineBattle(out, r, myPreset.name, myLine, oppLine);
-
-    const dbWinner = mapBattleResultToDbWinner(r, data.i_am_a);
-    const client = getSb();
-    if (!client) return;
-    const { error: finErr } = await client.rpc("rpc_finalize_human_battle", {
-      p_battle_id: data.battle_id,
-      p_winner: dbWinner,
-    });
-    if (finErr) setOnlineMsg(msgEl, `結果保存に失敗: ${finErr.message}`, true);
-    else setOnlineMsg(msgEl, "対戦結果を記録しました。", false);
-    stopWaiting();
-  }
-
-  function stopWaiting() {
-    const client = getSb();
-    if (waitingRealtime && client) {
-      client.removeChannel(waitingRealtime);
-      waitingRealtime = null;
-    }
-    if (waitPollTimer) {
-      clearInterval(waitPollTimer);
-      waitPollTimer = null;
-    }
-  }
-
-  async function handleHumanInsert(payload, myPreset, myPayload) {
-    const row = payload.new;
-    if (!row || row.mode !== "random_human") return;
-    if (row.id && handledHumanBattles.has(row.id)) return;
-    const session = await ensureSession();
-    if (!session) return;
-    const uid = session.user.id;
-    if (row.a_user !== uid && row.b_user !== uid) return;
-    if (row.id) handledHumanBattles.add(row.id);
-
-    stopWaiting();
-    const msgEl = $("online-config-msg");
-    const iAmA = row.a_user === uid;
-    const oppPayload = iAmA ? row.b_payload : row.a_payload;
-    const parsed = parsePayloadAsParsedOpp(oppPayload);
-    const r = deps.battle(myPayload.wordIds, parsed.wordIds || []);
-    const myLine = deps.getPresetDisplayLine(myPreset);
-    const oppLine = deps.buildOpponentDisplayLine({}, parsed);
-    renderOnlineBattle($("online-out"), r, myPreset.name, myLine, oppLine);
-
-    const dbWinner = mapBattleResultToDbWinner(r, iAmA);
-    const cFin = getSb();
-    if (!cFin) return;
-    const { error } = await cFin.rpc("rpc_finalize_human_battle", {
-      p_battle_id: row.id,
-      p_winner: dbWinner,
-    });
-    if (error) setOnlineMsg(msgEl, `結果保存に失敗: ${error.message}`, true);
-    else setOnlineMsg(msgEl, "対戦結果を記録しました。", false);
-  }
-
-  function startWaitingForHumanMatch(uid, myPreset, myPayload) {
-    stopWaiting();
-    const msgEl = $("online-config-msg");
-
-    const client = getSb();
-    if (!client) return;
-    waitingRealtime = client
-      .channel(`wg-human-${uid}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "battles", filter: `a_user=eq.${uid}` },
-        (p) => handleHumanInsert(p, myPreset, myPayload)
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "battles", filter: `b_user=eq.${uid}` },
-        (p) => handleHumanInsert(p, myPreset, myPayload)
-      )
-      .subscribe();
-
-    waitPollTimer = window.setInterval(async () => {
-      const c = getSb();
-      if (!c) return;
-      const { data: rows } = await c
-        .from("battles")
-        .select("*")
-        .eq("mode", "random_human")
-        .eq("winner", "draw")
-        .or(`a_user.eq.${uid},b_user.eq.${uid}`)
-        .order("created_at", { ascending: false })
-        .limit(3);
-      const row = rows && rows.find((r) => !handledHumanBattles.has(r.id));
-      if (!row) return;
-      await handleHumanInsert({ new: row }, myPreset, myPayload);
-    }, 2500);
-  }
-
-  async function cancelQueue() {
-    const msgEl = $("online-config-msg");
-    const session = await ensureSession();
-    if (!session) return;
-    const client = getSb();
-    if (client) await client.from("random_queue").delete().eq("user_id", session.user.id);
-    stopWaiting();
-    setOnlineMsg(msgEl, "待ちキューをキャンセルしました。", false);
-  }
-
   async function runRandomCard() {
     const msgEl = $("online-config-msg");
     const out = $("online-out");
@@ -471,12 +314,6 @@
 
     const btnUp = $("btn-upload-shared");
     if (btnUp) btnUp.addEventListener("click", () => uploadSharedCard());
-
-    const btnRh = $("btn-random-human");
-    if (btnRh) btnRh.addEventListener("click", () => runRandomHuman());
-
-    const btnCancel = $("btn-cancel-queue");
-    if (btnCancel) btnCancel.addEventListener("click", () => cancelQueue());
 
     const btnRc = $("btn-random-card");
     if (btnRc) btnRc.addEventListener("click", () => runRandomCard());

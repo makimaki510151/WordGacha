@@ -117,7 +117,7 @@
           <h2>オンライン（Supabase）</h2>
           <div class="card">
             <p style="margin: 0 0 0.75rem; color: var(--muted); font-size: 0.9rem">
-              <strong>Google でログイン</strong>すると、図鑑・ガチャ回数・名刺入れが Supabase に保存され、別の端末でも同じデータになります。ログイン後に名刺をサーバーに公開すると、<strong>ランダム（実プレイヤー）</strong>の待ち合わせや<strong>ランダム（登録名刺）</strong>（未対戦優先）、<strong>指定対戦</strong>（相手の短いコード）が使えます。
+              <strong>Google でログイン</strong>すると、図鑑・ガチャ回数・名刺入れが Supabase に保存され、別の端末でも同じデータになります。ログイン後に名刺をサーバーに公開すると、<strong>ランダム（登録名刺）</strong>（未対戦優先）と<strong>指定対戦</strong>（相手の短いコード）が使えます。
             </p>
             <p id="online-config-msg" class="msg-error" style="margin: 0 0 0.75rem; display: none"></p>
             <div id="online-auth-panel" style="margin-bottom: 1rem">
@@ -134,8 +134,6 @@
               <button type="button" id="btn-upload-shared" class="secondary">この名刺をサーバーに公開</button>
             </div>
             <div class="row" style="flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem">
-              <button type="button" id="btn-random-human" class="primary">ランダム対戦（実プレイヤー）</button>
-              <button type="button" id="btn-cancel-queue" class="secondary">待ちキャンセル</button>
               <button type="button" id="btn-random-card" class="primary">ランダム対戦（誰かの公開名刺）</button>
             </div>
             <div class="row" style="flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.75rem">
