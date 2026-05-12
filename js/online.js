@@ -124,9 +124,17 @@
   function fillPresetSelect(selectEl) {
     if (!selectEl || !deps.loadPresets) return;
     const presets = deps.loadPresets();
+    const prevRaw = selectEl.value;
     selectEl.innerHTML =
       presets.map((p, i) => `<option value="${i}">${deps.escapeHtml(p.name || `名刺 ${i + 1}`)}</option>`).join("") ||
       `<option value="">— 名刺入れに保存してください —</option>`;
+    if (!presets.length) return;
+    const prevNum = parseInt(prevRaw, 10);
+    if (Number.isFinite(prevNum) && prevNum >= 0 && prevNum < presets.length) {
+      selectEl.value = String(prevNum);
+    } else {
+      selectEl.value = "0";
+    }
   }
 
   async function signInGoogle() {
@@ -178,6 +186,20 @@
     );
     const client = getSb();
     if (!client) return;
+    const { data: existing, error: exErr } = await client
+      .from("shared_cards")
+      .select("id")
+      .eq("owner_id", session.user.id)
+      .eq("fingerprint", payload.fingerprint)
+      .maybeSingle();
+    if (exErr) {
+      setOnlineMsg(msgEl, `確認エラー: ${exErr.message}`, true);
+      return;
+    }
+    if (existing) {
+      setOnlineMsg(msgEl, "この名刺（同一の語・名乗り）はすでに公開済みです。", true);
+      return;
+    }
     const { error } = await client.from("shared_cards").insert({
       owner_id: session.user.id,
       name: presets[idx].name || "名刺",
@@ -185,7 +207,14 @@
       payload,
     });
     if (error) {
-      setOnlineMsg(msgEl, `公開に失敗: ${error.message}`, true);
+      const dup =
+        error.code === "23505" ||
+        (typeof error.message === "string" && /duplicate|unique/i.test(error.message));
+      setOnlineMsg(
+        msgEl,
+        dup ? "この名刺（同一の語・名乗り）はすでに公開済みです。" : `公開に失敗: ${error.message}`,
+        true
+      );
       return;
     }
     setOnlineMsg(msgEl, "サーバーに名刺を公開しました（ランダム対戦の相手プールに載ります）。", false);

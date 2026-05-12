@@ -63,6 +63,9 @@ create table if not exists public.shared_cards (
 
 create index if not exists shared_cards_owner_idx on public.shared_cards (owner_id);
 create index if not exists shared_cards_fingerprint_idx on public.shared_cards (fingerprint);
+-- 同一ユーザーが同じ語構成の名刺を二重公開しない
+create unique index if not exists shared_cards_owner_fingerprint_unique
+  on public.shared_cards (owner_id, fingerprint);
 
 alter table public.shared_cards enable row level security;
 
