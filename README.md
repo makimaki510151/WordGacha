@@ -41,23 +41,11 @@
 1. **SQL Editor** を開く。
 2. リポジトリ内の `supabase/enable-realtime-battles.sql` の中身（1 行の `alter publication ...`）を貼り付けて **Run** する。
 
-**API キーについて:** [Legacy API keys](https://supabase.com/dashboard/project/_/settings/api-keys/legacy) の **anon** は、ブラウザに埋め込む用途向けの公開鍵です（[Settings → API](https://supabase.com/dashboard/project/_/settings/api) からも取得できます）。それでも **GitHub にそのまま push しない**よう、このリポジトリでは `js/supabase-config.js` を `.gitignore` に入れています。
+**API キーについて:** [Settings → API](https://supabase.com/dashboard/project/_/settings/api) の **anon** はブラウザ埋め込み用の公開鍵です。**GitHub Pages** では `js/supabase-config.js` をリポジトリに含める必要があるため（含めないと 404）、このリポジトリでは既定で `js/supabase-config.js` を追跡しています。公開リポジトリで気になる場合は [Dashboard で anon をローテート](https://supabase.com/dashboard/project/_/settings/api)し、値を差し替えてください。
 
-### 5. フロントの設定ファイル
+### 5. ホスティング
 
-1. `js/supabase-config.example.js` をコピーして `js/supabase-config.js` を作成します。
-2. `url` と `anonKey` に、手順 1 の値を貼り付けます。
-
-```javascript
-window.WG_SUPABASE_CONFIG = {
-  url: "https://xxxx.supabase.co",
-  anonKey: "eyJhbGciOi...",
-};
-```
-
-### 6. ホスティング
-
-静的ファイル（`index.html`, `css/`, `js/`）を **GitHub Pages / Cloudflare Pages / Netlify** などに置くだけで動きます。ビルドは不要です。
+静的ファイル（`index.html`, `css/`, `js/`）を **GitHub Pages / Cloudflare Pages / Netlify** などに置くだけで動きます。ビルドは不要です。**`js/supabase-config.js`** は Pages で読み込まれるため、必ずコミットに含め、`url` / `anonKey` を自分の Supabase に合わせてください。
 
 ---
 

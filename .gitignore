@@ -1,2 +1,2 @@
-# ローカルの Supabase 鍵（誤って push しないため）
-js/supabase-config.js
+# 任意: ローカルだけ別鍵にしたい場合は supabase-config.local.js など別名を使い、
+# index.html で読み込む（既定の js/supabase-config.js は GitHub Pages 用にリポジトリへ含めます）。

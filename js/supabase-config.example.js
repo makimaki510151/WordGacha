@@ -1,6 +1,5 @@
 /**
- * このファイルをコピーして js/supabase-config.js を作成し、
- * Supabase ダッシュボードの Project URL と anon public key を貼り付けてください。
+ * 別プロジェクト用のテンプレート。既定はリポジトリ内の js/supabase-config.js を編集してください。
  */
 window.WG_SUPABASE_CONFIG = {
   url: "https://YOUR_PROJECT_REF.supabase.co",
