@@ -9,7 +9,7 @@
   <body>
     <header class="app-header">
       <h1>WordGacha</h1>
-      <p>言葉を引き、組み立て、名刺にして、JSONで対戦。すべてブラウザ内で完結します。</p>
+      <p>言葉を引き、組み立て、名刺にして、JSONで対戦。Google ログインで図鑑・ガチャ・名刺を端末間同期できます。</p>
     </header>
 
     <div class="layout">
@@ -19,6 +19,7 @@
         <button type="button" id="nav-build">組み立て</button>
         <button type="button" id="nav-case">名刺入れ</button>
         <button type="button" id="nav-battle">対戦</button>
+        <button type="button" id="nav-online">オンライン</button>
       </nav>
 
       <main class="panel">
@@ -112,6 +113,42 @@
           </div>
         </section>
 
+        <section id="sec-online" class="panel-section" aria-labelledby="nav-online">
+          <h2>オンライン（Supabase）</h2>
+          <div class="card">
+            <p style="margin: 0 0 0.75rem; color: var(--muted); font-size: 0.9rem">
+              <strong>Google でログイン</strong>すると、図鑑・ガチャ回数・名刺入れが Supabase に保存され、別の端末でも同じデータになります。ログイン後に名刺をサーバーに公開すると、<strong>ランダム（実プレイヤー）</strong>の待ち合わせや<strong>ランダム（登録名刺）</strong>（未対戦優先）、<strong>指定対戦</strong>（相手の短いコード）が使えます。
+            </p>
+            <p id="online-config-msg" class="msg-error" style="margin: 0 0 0.75rem; display: none"></p>
+            <div id="online-auth-panel" style="margin-bottom: 1rem">
+              <p id="online-status" style="margin: 0 0 0.5rem"></p>
+              <button type="button" id="btn-online-google" class="primary">Google でログイン</button>
+              <button type="button" id="btn-online-logout" class="secondary">ログアウト</button>
+              <p id="online-identity" style="margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--muted)"></p>
+            </div>
+            <div class="row" style="margin-bottom: 0.75rem; align-items: flex-end; flex-wrap: wrap; gap: 0.75rem">
+              <div>
+                <label for="sel-online-preset">使う名刺（名刺入れ）</label><br />
+                <select id="sel-online-preset"></select>
+              </div>
+              <button type="button" id="btn-upload-shared" class="secondary">この名刺をサーバーに公開</button>
+            </div>
+            <div class="row" style="flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem">
+              <button type="button" id="btn-random-human" class="primary">ランダム対戦（実プレイヤー）</button>
+              <button type="button" id="btn-cancel-queue" class="secondary">待ちキャンセル</button>
+              <button type="button" id="btn-random-card" class="primary">ランダム対戦（誰かの公開名刺）</button>
+            </div>
+            <div class="row" style="flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.75rem">
+              <div>
+                <label for="online-target-code">相手の短いコード（プロフィールに表示）</label><br />
+                <input type="text" id="online-target-code" maxlength="16" autocomplete="off" placeholder="例: a1b2c3d4" style="min-width: 12rem" />
+              </div>
+              <button type="button" id="btn-direct-battle" class="primary">指定対戦</button>
+            </div>
+            <div id="online-out" class="battle-log battle-theater" role="region" aria-live="polite"></div>
+          </div>
+        </section>
+
         <section id="sec-battle" class="panel-section" aria-labelledby="nav-battle">
           <h2>対戦（ローカル）</h2>
           <div class="card">
@@ -137,7 +174,12 @@
       言葉データは <code>js/words.js</code> の <code>WORD_CATALOG</code> に追記して増やせます（約500語入り）。
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="js/words.js"></script>
+    <script src="js/battle-engine.js"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/cloud-sync.js"></script>
     <script src="js/app.js"></script>
+    <script src="js/online.js"></script>
   </body>
 </html>

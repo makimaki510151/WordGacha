@@ -1,0 +1,2 @@
+# ローカルの Supabase 鍵（誤って push しないため）
+js/supabase-config.js

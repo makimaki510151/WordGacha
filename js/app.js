@@ -18,16 +18,17 @@
   const MAX_WORDS_IN_PHRASE = 10;
   const JAM_FOR_PITY = 50;
   const MAX_GACHA_LOG = 120;
-  /** 語の並びの直後に付く固定文（プレイヤー名の直前は語列） */
-  const FIXED_INTRO_TAIL = "です。対戦よろしくお願いします。";
-
   /** 対戦共有: true なら語ID配列を Base64 で包む（難読化。鍵を伴わないため暗号ではない） */
   const BATTLE_SHARE_BASE64 = true;
   const BATTLE_SHARE_VER = 1;
 
   /** @type {typeof WORD_CATALOG} */
   const CATALOG = WORD_CATALOG;
-  const byId = new Map(CATALOG.map((w) => [w.id, w]));
+  const BE = WordGachaBattle.createBattleEngine(WORD_CATALOG);
+  const battle = BE.battle;
+  const FIXED_INTRO_TAIL = BE.FIXED_INTRO_TAIL;
+  const oppBattleFingerprint = BE.oppBattleFingerprint;
+  const byId = BE.byId;
 
   /** よく使う助詞・接続詞・句読点（常に図鑑登録済み。ガチャでは出ません） */
   const STARTER_GRAMMAR_IDS = [
@@ -36,22 +37,6 @@
     "w501", "w502", "w503", "w504", "w505", "w506", "w507", "w508", "w509", "w510", "w511", "w512",
   ];
   const STARTER_GRAMMAR_SET = new Set(STARTER_GRAMMAR_IDS.filter((id) => byId.has(id)));
-
-  const GOOD_PAIRS = new Set([
-    "fire-wind",
-    "water-life",
-    "earth-metal",
-    "light-mind",
-    "shadow-cosmos",
-    "hero-light",
-    "mage-cosmos",
-  ]);
-  const BAD_PAIRS = new Set([
-    "fire-water",
-    "fire-ice",
-    "light-shadow",
-    "wind-earth",
-  ]);
 
   let gachaBusy = false;
 
@@ -77,6 +62,7 @@
 
   function saveOwned(set) {
     localStorage.setItem(STORAGE.owned, JSON.stringify([...set]));
+    persistCloudIfNeeded();
   }
 
   function loadJam() {
@@ -86,6 +72,7 @@
 
   function saveJam(n) {
     localStorage.setItem(STORAGE.jam, String(n));
+    persistCloudIfNeeded();
   }
 
   function getPullState() {
@@ -94,6 +81,7 @@
     if (day !== key) {
       localStorage.setItem(STORAGE.day, key);
       localStorage.setItem(STORAGE.pulls, "0");
+      persistCloudIfNeeded();
       return { pulls: 0, key };
     }
     const pulls = parseInt(localStorage.getItem(STORAGE.pulls) || "0", 10) || 0;
@@ -103,6 +91,7 @@
   function addPullCount(n) {
     const { pulls } = getPullState();
     localStorage.setItem(STORAGE.pulls, String(pulls + n));
+    persistCloudIfNeeded();
   }
 
   function loadGachaLog() {
@@ -117,6 +106,7 @@
 
   function saveGachaLog(entries) {
     localStorage.setItem(STORAGE.gachaLog, JSON.stringify(entries.slice(0, MAX_GACHA_LOG)));
+    persistCloudIfNeeded();
   }
 
   function prependGachaLog(newItems) {
@@ -138,6 +128,13 @@
 
   function savePresets(arr) {
     localStorage.setItem(STORAGE.presets, JSON.stringify(arr));
+    persistCloudIfNeeded();
+  }
+
+  function persistCloudIfNeeded() {
+    if (window.WordGachaCloudSync && typeof window.WordGachaCloudSync.requestPush === "function") {
+      window.WordGachaCloudSync.requestPush();
+    }
   }
 
   /** 名刺データに対戦履歴用フィールドを保証 */
@@ -145,17 +142,6 @@
     if (!p || typeof p !== "object") return p;
     if (!Array.isArray(p.battleHistory)) p.battleHistory = [];
     return p;
-  }
-
-  /**
-   * 相手名刺の同一性（再戦判定・勝率の初回のみカウント用）
-   * 語の並び・プレイヤー名・固定文末が同じなら同一とみなす
-   */
-  function oppBattleFingerprint(wordIds, playerName, fixedTail) {
-    const ids = Array.isArray(wordIds) ? wordIds.filter((x) => typeof x === "string") : [];
-    const n = playerName != null ? String(playerName).trim() : "";
-    const t = (fixedTail != null && String(fixedTail).trim()) || FIXED_INTRO_TAIL;
-    return `v1|${ids.join("\x1e")}|${n}|${t}`;
   }
 
   function battleResultLetter(winner) {
@@ -235,121 +221,6 @@
     if (usePity && !isDup) jamAfter = jamBefore - JAM_FOR_PITY;
     else if (isDup) jamAfter = jamBefore + 1;
     return { word: picked, isDup, usedPity: usePity && !isDup, jamAfter };
-  }
-
-  function pairKey(a, b) {
-    return a < b ? `${a}-${b}` : `${b}-${a}`;
-  }
-
-  function adjacentAffinity(tagsA, tagsB) {
-    let score = 0;
-    const setA = new Set(tagsA);
-    const setB = new Set(tagsB);
-    for (const t of setA) if (setB.has(t)) score += 2;
-    for (const ta of tagsA) {
-      for (const tb of tagsB) {
-        const k = pairKey(ta, tb);
-        if (GOOD_PAIRS.has(k)) score += 3;
-        if (BAD_PAIRS.has(k)) score -= 2;
-      }
-    }
-    return score;
-  }
-
-  /**
-   * 同一スロット対決: 相性の差が効き、火力差は補助程度
-   */
-  function positionClash(wA, wB) {
-    if (!wA || !wB) return 0;
-    const aff = adjacentAffinity(wA.tags, wB.tags);
-    return aff * 2 + Math.floor((wA.power - wB.power) / 3);
-  }
-
-  /** 語数を増やしただけの有利を抑える（総火力はべき乗で伸びにくい） */
-  const BATTLE_PWR_EXP = 0.48;
-  const BATTLE_PWR_SCALE = 3.85;
-  /** 連鎖の「平均相性」×√(つなぎ数) … 短くてもリンクが強ければ大きくなる */
-  const BATTLE_AFF_AVG_SCALE = 40;
-  /** 語順・形容の微調整（旧 position、比重は低め） */
-  const BATTLE_POS_MUL = 0.28;
-  /** 相手より長い余り語に課す不利（語を足して押す戦略を弱体化） */
-  const BATTLE_OVERFLOW_TAX = 0.52;
-
-  function scoreLine(wordIds) {
-    const words = wordIds.map((id) => byId.get(id)).filter(Boolean);
-    const n = words.length;
-    let sumPower = 0;
-    let synergy = 0;
-    words.forEach((w) => {
-      sumPower += w.power;
-    });
-    for (let i = 0; i < n - 1; i++) {
-      synergy += adjacentAffinity(words[i].tags, words[i + 1].tags);
-    }
-    const edges = Math.max(1, n - 1);
-    const avgSynergy = synergy / edges;
-
-    let position = 0;
-    words.forEach((w, i) => {
-      const mul = 1 + i * 0.03 + (w.kind === "adj_na" ? 0.05 : 0);
-      position += Math.round(w.power * (mul - 1));
-    });
-    const positionTerm = Math.round(position * BATTLE_POS_MUL);
-
-    const powerTerm = BATTLE_PWR_SCALE * Math.pow(Math.max(1, sumPower), BATTLE_PWR_EXP);
-    const affinityTerm = BATTLE_AFF_AVG_SCALE * avgSynergy * Math.sqrt(edges);
-
-    return {
-      words,
-      sumPower,
-      synergy,
-      edges,
-      avgSynergy,
-      /** 表示・旧コード互換: 内部スコアは affinityTerm + powerTerm + positionTerm */
-      power: sumPower,
-      position: positionTerm,
-      powerTerm,
-      affinityTerm,
-    };
-  }
-
-  function overflowPowerDeduction(line, opponentWordCount) {
-    const extra = line.words.length > opponentWordCount ? line.words.slice(opponentWordCount) : [];
-    let raw = 0;
-    extra.forEach((w) => {
-      raw += w.power;
-    });
-    return raw * BATTLE_OVERFLOW_TAX;
-  }
-
-  function battle(idsA, idsB) {
-    const lineA = scoreLine(idsA);
-    const lineB = scoreLine(idsB);
-    const lenA = lineA.words.length;
-    const lenB = lineB.words.length;
-    const n = Math.max(lenA, lenB);
-    let clashA = 0;
-    let clashB = 0;
-    for (let i = 0; i < n; i++) {
-      const a = lineA.words[i];
-      const b = lineB.words[i];
-      const c = positionClash(a, b);
-      if (c > 0) clashA += c;
-      if (c < 0) clashB += -c;
-    }
-    let totalA =
-      lineA.affinityTerm + lineA.powerTerm + lineA.position + clashA - overflowPowerDeduction(lineA, lenB);
-    let totalB =
-      lineB.affinityTerm + lineB.powerTerm + lineB.position + clashB - overflowPowerDeduction(lineB, lenA);
-    return {
-      lineA,
-      lineB,
-      clashA,
-      clashB,
-      totalA,
-      totalB,
-      winner: totalA === totalB ? "draw" : totalA > totalB ? "a" : "b",
-    };
   }
 
   /**
@@ -643,10 +514,12 @@
     navBuild: document.getElementById("nav-build"),
     navCase: document.getElementById("nav-case"),
     navBattle: document.getElementById("nav-battle"),
+    navOnline: document.getElementById("nav-online"),
     secGacha: document.getElementById("sec-gacha"),
     secDex: document.getElementById("sec-dex"),
     secBuild: document.getElementById("sec-build"),
     secCase: document.getElementById("sec-case"),
+    secOnline: document.getElementById("sec-online"),
     secBattle: document.getElementById("sec-battle"),
     gachaStatus: document.getElementById("gacha-status"),
     gachaResult: document.getElementById("gacha-result"),
@@ -686,8 +559,10 @@
       ["dex", els.secDex, els.navDex],
       ["build", els.secBuild, els.navBuild],
       ["case", els.secCase, els.navCase],
+      ["online", els.secOnline, els.navOnline],
       ["battle", els.secBattle, els.navBattle],
     ].forEach(([name, sec, nav]) => {
+      if (!sec || !nav) return;
       const on = name === id;
       sec.classList.toggle("active", on);
       nav.classList.toggle("active", on);
@@ -1082,6 +957,7 @@
         presets.splice(i, 1);
         savePresets(presets);
         renderCase();
+        window.dispatchEvent(new CustomEvent("wg:presets-changed"));
       });
     });
   }
@@ -1166,6 +1042,7 @@
     if (els.gachaSkipFx) {
       els.gachaSkipFx.addEventListener("change", () => {
         localStorage.setItem(STORAGE.gachaSkipFx, els.gachaSkipFx.checked ? "1" : "0");
+        persistCloudIfNeeded();
       });
     }
     els.navDex.addEventListener("click", () => {
@@ -1184,6 +1061,11 @@
       setSection("battle");
       renderBattleSelects();
     });
+    if (els.navOnline) {
+      els.navOnline.addEventListener("click", () => {
+        setSection("online");
+      });
+    }
 
     els.btnPull.addEventListener("click", async () => {
       if (gachaBusy) return;
@@ -1311,6 +1193,7 @@
       savePresets(all);
       els.buildStatus.textContent = "名刺入れに保存しました。";
       els.buildStatus.className = "msg-ok";
+      window.dispatchEvent(new CustomEvent("wg:presets-changed"));
     });
 
     els.btnBattle.addEventListener("click", () => {
@@ -1369,7 +1252,71 @@
     });
   }
 
-  function init() {
+  async function init() {
+    if (window.WordGachaCloudSync && typeof window.WordGachaCloudSync.init === "function") {
+      window.WordGachaCloudSync.init({
+        getGameState() {
+          let ownedRaw = [];
+          try {
+            const raw = localStorage.getItem(STORAGE.owned);
+            const arr = raw ? JSON.parse(raw) : [];
+            ownedRaw = Array.isArray(arr) ? arr : [];
+          } catch {
+            ownedRaw = [];
+          }
+          const { pulls } = getPullState();
+          const day = localStorage.getItem(STORAGE.day) || todayKey();
+          let presets = [];
+          try {
+            const raw = localStorage.getItem(STORAGE.presets);
+            const arr = raw ? JSON.parse(raw) : [];
+            presets = Array.isArray(arr) ? arr.map(normalizePreset) : [];
+          } catch {
+            presets = [];
+          }
+          return {
+            owned_ids: ownedRaw,
+            jam: loadJam(),
+            pull_day: day,
+            pulls_today: pulls,
+            presets,
+            gacha_log: loadGachaLog(),
+            gacha_skip_fx: localStorage.getItem(STORAGE.gachaSkipFx) === "1",
+          };
+        },
+        applyGameState(row) {
+          if (!row || typeof row !== "object") return;
+          const ids = Array.isArray(row.owned_ids) ? row.owned_ids : [];
+          localStorage.setItem(STORAGE.owned, JSON.stringify(ids));
+          const j = parseInt(String(row.jam), 10);
+          localStorage.setItem(STORAGE.jam, String(Number.isFinite(j) ? Math.max(0, j) : 0));
+          const pd = row.pull_day != null ? String(row.pull_day) : todayKey();
+          localStorage.setItem(STORAGE.day, pd);
+          const pt = parseInt(String(row.pulls_today), 10);
+          localStorage.setItem(STORAGE.pulls, String(Number.isFinite(pt) ? Math.max(0, pt) : 0));
+          const plist = Array.isArray(row.presets) ? row.presets.map(normalizePreset) : [];
+          localStorage.setItem(STORAGE.presets, JSON.stringify(plist));
+          const log = Array.isArray(row.gacha_log) ? row.gacha_log : [];
+          localStorage.setItem(STORAGE.gachaLog, JSON.stringify(log.slice(0, MAX_GACHA_LOG)));
+          localStorage.setItem(STORAGE.gachaSkipFx, row.gacha_skip_fx ? "1" : "0");
+        },
+        onRefreshAllUI() {
+          if (els.gachaSkipFx) {
+            els.gachaSkipFx.checked = localStorage.getItem(STORAGE.gachaSkipFx) === "1";
+          }
+          renderGachaStatus();
+          renderGachaLog();
+          renderDex();
+          renderCase();
+          renderBattleSelects();
+          renderBuilder(loadOwned());
+          refreshPreview();
+          window.dispatchEvent(new CustomEvent("wg:presets-changed"));
+        },
+      });
+      await window.WordGachaCloudSync.hydrateFromSessionIfAny();
+    }
+
     els.gachaReveal.textContent = "ガチャを回すと演出が始まります";
     els.gachaHint.textContent = "";
     if (els.gachaSkipFx) {
@@ -1379,6 +1326,19 @@
     renderGachaLog();
     wire();
     setSection("gacha");
+
+    if (window.WordGachaOnline && typeof window.WordGachaOnline.init === "function") {
+      window.WordGachaOnline.init({
+        renderBattleResult,
+        buildOpponentDisplayLine,
+        getPresetDisplayLine,
+        loadPresets,
+        escapeHtml,
+        battle,
+        FIXED_INTRO_TAIL,
+        oppBattleFingerprint,
+      });
+    }
   }
 
   init();
