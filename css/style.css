@@ -524,6 +524,92 @@ select.slot-word-select {
   align-items: center;
 }
 
+.preset-battle-rate {
+  width: 100%;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.preset-battle-details {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  padding: 0.35rem 0.65rem 0.65rem;
+}
+
+.preset-battle-summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0.35rem 0;
+}
+
+.preset-battle-log {
+  margin: 0.35rem 0 0;
+  padding-left: 1.15rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.preset-battle-log__item {
+  margin: 0.5rem 0;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px dashed var(--border);
+  list-style-position: outside;
+}
+
+.preset-battle-log__item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.preset-battle-log__meta {
+  display: block;
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.preset-battle-log__opp {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.preset-battle-tag {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.preset-battle-tag--counted {
+  background: rgba(94, 225, 214, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(94, 225, 214, 0.35);
+}
+
+.preset-battle-tag--repeat {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.battle-record-note {
+  margin: 1rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .case-copy-toast {
   margin: 0.5rem 0 0;
   font-size: 0.85rem;

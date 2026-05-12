@@ -129,7 +129,8 @@
     try {
       const raw = localStorage.getItem(STORAGE.presets);
       const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
+      const list = Array.isArray(arr) ? arr : [];
+      return list.map(normalizePreset);
     } catch {
       return [];
     }
@@ -137,6 +138,77 @@
 
   function savePresets(arr) {
     localStorage.setItem(STORAGE.presets, JSON.stringify(arr));
+  }
+
+  /** 名刺データに対戦履歴用フィールドを保証 */
+  function normalizePreset(p) {
+    if (!p || typeof p !== "object") return p;
+    if (!Array.isArray(p.battleHistory)) p.battleHistory = [];
+    return p;
+  }
+
+  /**
+   * 相手名刺の同一性（再戦判定・勝率の初回のみカウント用）
+   * 語の並び・プレイヤー名・固定文末が同じなら同一とみなす
+   */
+  function oppBattleFingerprint(wordIds, playerName, fixedTail) {
+    const ids = Array.isArray(wordIds) ? wordIds.filter((x) => typeof x === "string") : [];
+    const n = playerName != null ? String(playerName).trim() : "";
+    const t = (fixedTail != null && String(fixedTail).trim()) || FIXED_INTRO_TAIL;
+    return `v1|${ids.join("\x1e")}|${n}|${t}`;
+  }
+
+  function battleResultLetter(winner) {
+    if (winner === "draw") return "draw";
+    if (winner === "a") return "win";
+    return "lose";
+  }
+
+  function battleResultLabelJa(letter) {
+    if (letter === "win") return "勝ち";
+    if (letter === "lose") return "負け";
+    return "引き分け";
+  }
+
+  /** 各相手の「初戦」だけを集計した勝敗・勝率（再戦は含めない） */
+  function summarizePresetBattleRate(battleHistory) {
+    const hist = Array.isArray(battleHistory) ? battleHistory : [];
+    const firstByKey = new Map();
+    for (const h of hist) {
+      if (!h || typeof h.oppKey !== "string") continue;
+      if (!firstByKey.has(h.oppKey)) firstByKey.set(h.oppKey, h);
+    }
+    let wins = 0;
+    let losses = 0;
+    let draws = 0;
+    for (const h of firstByKey.values()) {
+      if (h.result === "win") wins += 1;
+      else if (h.result === "lose") losses += 1;
+      else if (h.result === "draw") draws += 1;
+    }
+    const decided = wins + losses;
+    const winRatePct = decided > 0 ? Math.round((wins / decided) * 1000) / 10 : null;
+    return {
+      wins,
+      losses,
+      draws,
+      decided,
+      winRatePct,
+      uniqueOpponents: firstByKey.size,
+      totalRecords: hist.length,
+    };
+  }
+
+  function formatBattleAt(ts) {
+    const d = new Date(ts);
+    if (!Number.isFinite(d.getTime())) return "—";
+    return d.toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" });
+  }
+
+  function truncateOneLine(s, maxLen) {
+    const t = String(s || "").replace(/\s+/g, " ").trim();
+    if (t.length <= maxLen) return t;
+    return t.slice(0, maxLen - 1) + "…";
   }
 
   function randomChoice(arr) {
@@ -184,33 +256,78 @@
     return score;
   }
 
+  /**
+   * 同一スロット対決: 相性の差が効き、火力差は補助程度
+   */
   function positionClash(wA, wB) {
     if (!wA || !wB) return 0;
-    return adjacentAffinity(wA.tags, wB.tags) + Math.floor((wA.power - wB.power) / 2);
+    const aff = adjacentAffinity(wA.tags, wB.tags);
+    return aff * 2 + Math.floor((wA.power - wB.power) / 3);
   }
+
+  /** 語数を増やしただけの有利を抑える（総火力はべき乗で伸びにくい） */
+  const BATTLE_PWR_EXP = 0.48;
+  const BATTLE_PWR_SCALE = 3.85;
+  /** 連鎖の「平均相性」×√(つなぎ数) … 短くてもリンクが強ければ大きくなる */
+  const BATTLE_AFF_AVG_SCALE = 40;
+  /** 語順・形容の微調整（旧 position、比重は低め） */
+  const BATTLE_POS_MUL = 0.28;
+  /** 相手より長い余り語に課す不利（語を足して押す戦略を弱体化） */
+  const BATTLE_OVERFLOW_TAX = 0.52;
 
   function scoreLine(wordIds) {
     const words = wordIds.map((id) => byId.get(id)).filter(Boolean);
-    let power = 0;
+    const n = words.length;
+    let sumPower = 0;
     let synergy = 0;
     words.forEach((w) => {
-      power += w.power;
+      sumPower += w.power;
     });
-    for (let i = 0; i < words.length - 1; i++) {
+    for (let i = 0; i < n - 1; i++) {
       synergy += adjacentAffinity(words[i].tags, words[i + 1].tags);
     }
+    const edges = Math.max(1, n - 1);
+    const avgSynergy = synergy / edges;
+
     let position = 0;
     words.forEach((w, i) => {
       const mul = 1 + i * 0.03 + (w.kind === "adj_na" ? 0.05 : 0);
       position += Math.round(w.power * (mul - 1));
     });
-    return { power, synergy, position, words };
+    const positionTerm = Math.round(position * BATTLE_POS_MUL);
+
+    const powerTerm = BATTLE_PWR_SCALE * Math.pow(Math.max(1, sumPower), BATTLE_PWR_EXP);
+    const affinityTerm = BATTLE_AFF_AVG_SCALE * avgSynergy * Math.sqrt(edges);
+
+    return {
+      words,
+      sumPower,
+      synergy,
+      edges,
+      avgSynergy,
+      /** 表示・旧コード互換: 内部スコアは affinityTerm + powerTerm + positionTerm */
+      power: sumPower,
+      position: positionTerm,
+      powerTerm,
+      affinityTerm,
+    };
+  }
+
+  function overflowPowerDeduction(line, opponentWordCount) {
+    const extra = line.words.length > opponentWordCount ? line.words.slice(opponentWordCount) : [];
+    let raw = 0;
+    extra.forEach((w) => {
+      raw += w.power;
+    });
+    return raw * BATTLE_OVERFLOW_TAX;
   }
 
   function battle(idsA, idsB) {
     const lineA = scoreLine(idsA);
     const lineB = scoreLine(idsB);
-    const n = Math.max(lineA.words.length, lineB.words.length);
+    const lenA = lineA.words.length;
+    const lenB = lineB.words.length;
+    const n = Math.max(lenA, lenB);
     let clashA = 0;
     let clashB = 0;
     for (let i = 0; i < n; i++) {
@@ -220,8 +337,10 @@
       if (c > 0) clashA += c;
       if (c < 0) clashB += -c;
     }
-    const totalA = lineA.power + lineA.synergy + lineA.position + clashA;
-    const totalB = lineB.power + lineB.synergy + lineB.position + clashB;
+    let totalA =
+      lineA.affinityTerm + lineA.powerTerm + lineA.position + clashA - overflowPowerDeduction(lineA, lenB);
+    let totalB =
+      lineB.affinityTerm + lineB.powerTerm + lineB.position + clashB - overflowPowerDeduction(lineB, lenA);
     return {
       lineA,
       lineB,
@@ -897,12 +1016,47 @@
       .map(
         (p, i) => {
           const line = getPresetDisplayLine(p);
+          const sum = summarizePresetBattleRate(p.battleHistory);
+          const rateLine =
+            sum.uniqueOpponents === 0
+              ? "対戦記録はまだありません。"
+              : sum.decided > 0
+                ? `初回対戦のみ集計 · 勝率 <strong>${sum.winRatePct}%</strong>（${sum.wins}勝${sum.losses}敗${
+                    sum.draws ? ` · 引き分け${sum.draws}` : ""
+                  } · ユニーク相手 ${sum.uniqueOpponents}名）`
+                : `初回対戦のみ集計 · 勝敗なし（引き分け ${sum.draws} · ユニーク相手 ${sum.uniqueOpponents}名）`;
+          const hist = Array.isArray(p.battleHistory) ? p.battleHistory.slice().reverse() : [];
+          const histRows = hist
+            .map((h) => {
+              const counted = !!h.countedForRate;
+              const rateNote = counted
+                ? '<span class="preset-battle-tag preset-battle-tag--counted">勝率集計対象</span>'
+                : '<span class="preset-battle-tag preset-battle-tag--repeat">再戦（勝率は変化なし）</span>';
+              const res = battleResultLabelJa(h.result);
+              const when = formatBattleAt(h.at);
+              const oppShort = truncateOneLine(h.oppDisplayLine || "（相手名乗り不明）", 72);
+              return `<li class="preset-battle-log__item">
+            <span class="preset-battle-log__meta">${escapeHtml(when)} · ${escapeHtml(res)}</span>
+            ${rateNote}
+            <span class="preset-battle-log__opp">相手「${escapeHtml(oppShort)}」</span>
+          </li>`;
+            })
+            .join("");
+          const detailsBlock =
+            hist.length === 0
+              ? ""
+              : `<details class="preset-battle-details">
+            <summary class="preset-battle-summary">対戦履歴（${sum.totalRecords}件）</summary>
+            <ol class="preset-battle-log">${histRows}</ol>
+          </details>`;
           return `<li>
         <div class="preset-head">
           <strong>${escapeHtml(p.name || `名刺 ${i + 1}`)}</strong>
           <span class="stat-pill">${p.wordIds.length}語</span>
         </div>
+        <p class="preset-battle-rate" aria-label="勝率サマリー">${rateLine}</p>
         <p class="preset-fulltext">「${escapeHtml(line)}」</p>
+        ${detailsBlock}
         <div class="preset-actions">
           <button type="button" class="secondary" data-copy-json="${i}">JSONをコピー（Discord用）</button>
           <button type="button" class="secondary danger" data-del="${i}">削除</button>
@@ -1150,6 +1304,7 @@
         fixedTail: FIXED_INTRO_TAIL,
         createdAt: new Date().toISOString(),
         template: "free-v1",
+        battleHistory: [],
       };
       const all = loadPresets();
       all.push(preset);
@@ -1187,6 +1342,30 @@
       const myLine = getPresetDisplayLine(myPreset);
       const oppLine = buildOpponentDisplayLine(opp, parsedOpp);
       renderBattleResult(els.battleOut, r, myPreset.name, myLine, oppLine);
+
+      normalizePreset(myPreset);
+      const oppKey = oppBattleFingerprint(
+        parsedOpp.wordIds,
+        parsedOpp.playerName,
+        parsedOpp.fixedTail
+      );
+      const hadOpponentBefore = myPreset.battleHistory.some((h) => h && h.oppKey === oppKey);
+      const countedForRate = !hadOpponentBefore;
+      myPreset.battleHistory.push({
+        at: Date.now(),
+        oppKey,
+        oppDisplayLine: oppLine,
+        result: battleResultLetter(r.winner),
+        countedForRate,
+      });
+      savePresets(presets);
+
+      const note = document.createElement("p");
+      note.className = "battle-record-note";
+      note.textContent = countedForRate
+        ? "この対戦結果を名刺入れに記録しました（初めて対戦する相手のため、勝率に反映されます）。"
+        : "この対戦結果を名刺入れに記録しました（すでに対戦済みの相手のため、勝率は変わりません）。";
+      els.battleOut.appendChild(note);
     });
   }
 
